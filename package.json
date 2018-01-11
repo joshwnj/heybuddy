@@ -1,7 +1,7 @@
 {
   "name": "heybuddy",
   "version": "0.1.0",
-  "description": "",
+  "description": ":monkey: Run `npx heybuddy` in your project directory, and I will `npm install` packages that aren't in your package.json yet.",
   "main": "index.js",
   "bin": {
     "heybuddy": "./bin/cli.js"
@@ -17,5 +17,17 @@
     "chokidar": "^2.0.0",
     "dependency-check": "^2.9.2",
     "inquirer": "^5.0.0"
-  }
+  },
+  "directories": {
+    "example": "example"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshwnj/heybuddy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joshwnj/heybuddy/issues"
+  },
+  "homepage": "https://github.com/joshwnj/heybuddy#readme"
 }
