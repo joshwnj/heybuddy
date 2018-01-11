@@ -1,0 +1,21 @@
+{
+  "name": "heybuddy",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "bin": {
+    "heybuddy": "./bin/cli.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "joshwnj",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^2.3.0",
+    "chokidar": "^2.0.0",
+    "dependency-check": "^2.9.2",
+    "inquirer": "^5.0.0"
+  }
+}
