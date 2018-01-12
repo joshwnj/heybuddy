@@ -8,7 +8,15 @@ const readline = require('readline')
 const inquirer = require('inquirer')
 
 const log = console.log.bind(console)
+const monkey = '🐒'
+
 const queue = []
+const state = {
+  isBusy: false,
+  missing: [],
+  extras: [],
+  ignore: []
+}
 
 start(process.cwd())
 
@@ -17,12 +25,19 @@ async function start (dir) {
   const watcher = chokidar.watch(`${dir}/**/*.js`)
   watcher.on('change', handleChange)
 
+  // TODO: first run, check entries. Runs from watcher, check the changed file.
   await doDepCheck()
+  if (!queue.length) {
+    log('\n' + chalk.magenta(`${monkey}  hey buddy... ready when you are`))
+  }
+
   await checkQueue()
-  
+
   // ----
 
   async function handleChange (f) {
+    if (state.isBusy) { return }
+
     await doDepCheck()
     await checkQueue()
   }
@@ -34,38 +49,49 @@ async function start (dir) {
 
         const pkg = data.package
         const deps = data.used
-        
-        const extras = depcheck.extra(pkg, deps)
-        const missing = depcheck.missing(pkg, deps, {})
-        
+
+        const extras = filterIgnored(depcheck.extra(pkg, deps))
+        const missing = filterIgnored(depcheck.missing(pkg, deps, {}))
+
         if (missing.length) {
-          queue.push(() => handleMissingDeps(missing))
+          queue.push(() => handleMissingDeps())
+          state.missing = state.missing.concat(missing)
         }
-        
+
         if (extras.length) {
-          queue.push(() => handleExtraDeps(extras))
+          queue.push(() => handleExtraDeps())
+          state.extras = state.extras.concat(extras)
         }
-        
+
         resolve()
       })
     })
   }
 }
 
-function welcomeMessage () {
-  return 'keep up the great work'
-}
-
 async function checkQueue () {
+  if (state.isBusy) { return  }
+
   const f = queue.shift()
-  if (f) {
-    log('\n' + chalk.magenta('🐒  hey buddy...    '))
-    await f()
-    process.nextTick(checkQueue)
-  }
+  if (!f) { return }
+
+  log('\n' + chalk.magenta(`${monkey}  hey buddy... `))
+  state.isBusy = true
+  await f()
+  state.isBusy = false
+  process.nextTick(checkQueue)
 }
 
-function handleMissingDeps (deps) {
+function filterIgnored (deps) {
+  const { ignore } = state
+  return deps.filter(d => !ignore.includes(d))
+}
+
+function handleMissingDeps () {
+  const deps = filterIgnored(state.missing)
+  if (!deps.length) { return }
+  state.missing = []
+
   log('\n' + chalk.cyan('i found some deps missing from your package.json:'))
   log(chalk.cyan(deps.map(name => `- ${name}`).join('\n')) + '\n')
 
@@ -94,15 +120,20 @@ function handleMissingDeps (deps) {
         ]
       }
     ]).then(answers => {
-      if (answers.addMissingDeps !== 'yes') { return resolve() }
-      
+      if (answers.addMissingDeps !== 'yes') {
+        // TODO: handle permanent ignore
+        state.ignore = state.ignore.concat(deps)
+        log(chalk.green('ok'))
+        return resolve()
+      }
+
       log(chalk.green('installing...'))
       installDeps(deps, '-S', (err) => {
-        if (err) { 
-          log(chalk.red('Failed installing deps...')) 
+        if (err) {
+          log(chalk.red('Failed installing deps...'))
           return reject()
         }
-        
+
         log(chalk.green('ok'))
         resolve()
       })
@@ -110,7 +141,11 @@ function handleMissingDeps (deps) {
   })
 }
 
-function handleExtraDeps (deps) {
+function handleExtraDeps () {
+  const deps = filterIgnored(state.extras)
+  if (!deps.length) { return }
+  state.extras = []
+
   log('\n' + chalk.cyan(`i found some deps in your package.json that aren't used anywhere:`))
   log(chalk.cyan(deps.map(name => `- ${name}`).join('\n')) + '\n')
 
@@ -119,7 +154,7 @@ function handleExtraDeps (deps) {
       {
         type: 'list',
         name: 'removeExtras',
-        message: 'want me to update your package.json?',
+        message: 'want me to remove them from your package.json?',
         choices: [
           {
             key: 'y',
@@ -139,18 +174,39 @@ function handleExtraDeps (deps) {
         ]
       }
     ]).then(answers => {
-      
-      if (answers.removeExtras === 'yes') {
-        log(chalk.green('TBI...'))
+      if (answers.removeExtras !== 'yes') {
+        // TODO: handle permanent ignore
+        state.ignore = state.ignore.concat(deps)
+        log(chalk.green('ok'))
+        return resolve()
       }
 
-      resolve()
+      log(chalk.green('uninstalling...'))
+      uninstallDeps(deps, (err) => {
+        if (err) {
+          log(chalk.red('Failed uninstalling deps...'))
+          return reject()
+        }
+
+        log(chalk.green('ok'))
+        resolve()
+      })
     })
   })
 }
 
 function installDeps (deps, saveFlag, cb) {
   exec(`npm install ${saveFlag} --loglevel silent ${deps.join(' ')}`, (err, stdout, stderr) => {
+    if (err || stderr) {
+      return cb(err || stderr)
+    }
+
+    return cb()
+  })
+}
+
+function uninstallDeps (deps, cb) {
+  exec(`npm uninstall --loglevel silent ${deps.join(' ')}`, (err, stdout, stderr) => {
     if (err || stderr) {
       return cb(err || stderr)
     }
