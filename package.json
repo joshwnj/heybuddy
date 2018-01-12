@@ -1,6 +1,6 @@
 {
   "name": "heybuddy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": ":monkey: Run `npx heybuddy` in your project directory, and I will `npm install` packages that aren't in your package.json yet.",
   "main": "index.js",
   "bin": {
